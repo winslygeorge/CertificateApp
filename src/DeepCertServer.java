@@ -42,7 +42,7 @@ public class DeepCertServer {
 				
 				GenerateRootCert cert = new GenerateRootCert();
 				
-				if(cert.configCert()== false) {
+				if(!cert.configCert()) {
 					server.close();
 				}
 			}else {
@@ -51,7 +51,7 @@ public class DeepCertServer {
 				
 				keystore.load(new FileInputStream("confid/keystore.jceks"), "winslygay".toCharArray());
 				
-				if(keystore.containsAlias("rootPrivateKey")== false) {
+				if(!keystore.containsAlias("rootPrivateKey")) {
 					
 					server.close();
 				}
@@ -64,84 +64,52 @@ public class DeepCertServer {
 				System.out.println("client is connected");
 				
 				ObjectInputStream in  = new ObjectInputStream( client.getInputStream());
-				ObjectOutputStream out = new ObjectOutputStream(client.getOutputStream());
-				
-				Thread runnable = new Thread() {
-					
-				
-					public void run() {
-						
-						try {
-							
-						    if(!in.readUTF().equalsIgnoreCase("##reqcert>>")) {
-						    	
-						    	System.out.println("wrong cert request");
-						    }else{
-							
-							Cert  obj = (Cert)in.readObject();
-							
-							if(obj !=null) {
-											
-								
-															
-								PublicKey publickey = obj.getKey();
-								
-								X509Certificate cert = new SignReceivedCertificate().sign(publickey, obj.getStr());
-								
-								
-								
-								KeyStore keystore = KeyStore.getInstance("jceks");
-								
-								keystore.load(new FileInputStream("confid/keystore.jceks"), "winslygay".toCharArray());
-								
-								X509Certificate rcert = (X509Certificate) keystore.getCertificateChain("rootPrivateKey")[0];
-								
-								
-														
-								out.writeObject(new Cert("sentCert", cert, rcert));
-								out.flush();
-								
-								//byte [] outputarray = outarr.toByteArray();
-								
-								//out.println(outputarray);
-							}else {
-								
-								System.out.println("obj was null");
-							}
-							
-						    }
-						
-							in.close();
-							//outarr.close();
-					
-					
-					
-							out.close();
-							client.close();
-						} catch (IOException | IllegalStateException | ClassNotFoundException | InvalidKeyException | NoSuchAlgorithmException | SignatureException | KeyStoreException | CertificateException e) {
-							// TODO Auto-generated catch block
-							e.printStackTrace();
-						}
-						
-					}
-				};
-				
+				Thread runnable = getThread(in);
+
 				runnable.start();
 			}
 			
-		} catch (IOException e) {
+		} catch (IOException | KeyStoreException | NoSuchAlgorithmException | CertificateException e) {
 			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (KeyStoreException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (NoSuchAlgorithmException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (CertificateException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			System.err.println(e.getMessage());
 		}
+    }
 
+	private static Thread getThread(final ObjectInputStream in) throws IOException {
+		final ObjectOutputStream out = new ObjectOutputStream(client.getOutputStream());
+
+        return new Thread() {
+			public void run() {
+				try {
+					if(!in.readUTF().equalsIgnoreCase("##reqcert>>")) {
+						System.out.println("wrong cert request");
+					}else{
+					Cert  obj = (Cert) in.readObject();
+					if(obj !=null) {
+						PublicKey publickey = obj.getKey();
+						X509Certificate cert = new SignReceivedCertificate().sign(publickey, obj.getStr());
+						KeyStore keystore = KeyStore.getInstance("jceks");
+						keystore.load(new FileInputStream("confid/keystore.jceks"), "winslygay".toCharArray());
+						X509Certificate rcert = (X509Certificate) keystore.getCertificateChain("rootPrivateKey")[0];
+						out.writeObject(new Cert("sentCert", cert, rcert));
+						out.flush();
+
+					}else {
+
+						System.out.println("obj was null");
+					}
+
+					}
+
+					in.close();
+					out.close();
+					client.close();
+				} catch (IOException | IllegalStateException | ClassNotFoundException | InvalidKeyException | NoSuchAlgorithmException | SignatureException | KeyStoreException | CertificateException e) {
+					// TODO Auto-generated catch block
+					System.err.println(e.getMessage());
+				}
+
+			}
+		};
 	}
 }
